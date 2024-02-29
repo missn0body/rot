@@ -5,7 +5,7 @@
 #CC = i686-w64-mingw32-gcc
 #CC = x86_64-w64-mingw32-gcc
 CC = gcc
-CFLAGS = -Wall -Wextra -Wpedantic -Os -g
+CFLAGS = -Wall -Wextra -Wpedantic -Os -g -std=c2x
 
 rot.o: rot.c
 	$(CC) -c $^ -o $@ $(CFLAGS)
