@@ -59,9 +59,11 @@ static flag_t status = 0;
 // BOILERPLATE ENDS HERE
 ///////////////////////////////////////////////////////////
 
-const int OURBUF = 256;
+const int OURBUF 	= 256;
+const int ASCII_BEGIN 	= 33;	// 33 = '!'
+const int ASCII_END	= 126;	// 126 = '~'
 
-void rotate(FILE *fObj, int shift)
+void rotate(FILE *fObj)
 {
 	if(fObj == nullptr) return;
 
@@ -69,8 +71,18 @@ void rotate(FILE *fObj, int shift)
 	while(fgets(buffer, sizeof buffer, fObj) != NULL)
 	{
 		buffer[strcspn(buffer, "\r\n")] = '\0';
+		for(int i = 0; buffer[i] != '\0'; i++)
+		{
+			if(buffer[i] >= ASCII_BEGIN && buffer[i] <= ASCII_END)
+			{
+				buffer[i] = ASCII_BEGIN + ((buffer[i] + 14) % ((ASCII_END - ASCII_BEGIN) + 1));
+			}
+		}
+
 		printf("%s\n", buffer);
 	}
+
+	return;
 }
 
 int main(int argc, char *argv[])
@@ -82,6 +94,6 @@ int main(int argc, char *argv[])
 	_Assert(fObj != nullptr, strerror(errno));
 
 	// Actual rotation
-	rotate(fObj, 47);
+	rotate(fObj);
 	return 0;
 }
