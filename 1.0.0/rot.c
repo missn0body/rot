@@ -63,16 +63,15 @@ static flag_t status = 0;
 ///////////////////////////////////////////////////////////
 
 constexpr int OURBUF 	  = 256;
-constexpr int ASCII_BEGIN = 33;	 // '!'
-constexpr int ASCII_END   = 126; // '~'
+constexpr int ASCII_BEGIN = 33;
+constexpr int ASCII_END   = 126;
+constexpr int ASCII_SPAN  = (ASCII_END - ASCII_BEGIN) + 1;
 
-constexpr int UPPER_BEGIN = 65;	 // A
-constexpr int UPPER_END   = 90;	 // Z
-constexpr int LOWER_BEGIN = 97;	 // a
-constexpr int LOWER_END	  = 122; // z
-
-constexpr int ASCII_SPAN  = (ASCII_END - ASCII_BEGIN);
-//constexpr int ALPHA_SPAN  = (UPPER_END - UPPER_BEGIN);
+constexpr int UPPER_BEGIN = 65;
+constexpr int UPPER_END   = 90;
+constexpr int LOWER_BEGIN = 97;
+constexpr int LOWER_END   = 122;
+constexpr int ALPHA_SPAN  = (UPPER_END - UPPER_BEGIN) + 1;
 
 void rotate(FILE *fObj, flag_t *status, int shift)
 {
@@ -85,26 +84,22 @@ void rotate(FILE *fObj, flag_t *status, int shift)
 		if(test(*status, ROT47) || shift == 0)
 		{
 			// ROT47
-			for(int i = 0; buffer[i] != '\0'; i++)
-			{
+			for(size_t i = 0; buffer[i] != '\0'; i++)
 				if(buffer[i] >= ASCII_BEGIN && buffer[i] <= ASCII_END)
-				{
-					buffer[i] = ASCII_BEGIN + ((buffer[i] + 14) % (ASCII_SPAN + 1));
-				}
-			}
+					buffer[i] = ASCII_BEGIN + ((buffer[i] + 14) % ASCII_SPAN);
 		}
 		else if(test(*status, ROTN) || shift != 0)
 		{
 			// ROT(N), e.g. ROT13, ROT1, ROT25, etc...
-			for(int i = 0; buffer[i] != '\0'; i++)
+			for(size_t i = 0; buffer[i] != '\0'; i++)
 			{
 				if(buffer[i] >= UPPER_BEGIN && buffer[i] <= UPPER_END)
 				{
-					buffer[i] = buffer[i];
+					buffer[i] = (buffer[i] + shift > UPPER_END) ? (buffer[i] + shift) - ALPHA_SPAN : buffer[i] + shift;
 				}
 				else if(buffer[i] >= LOWER_BEGIN && buffer[i] <= LOWER_END)
 				{
-					buffer[i] = buffer[i];
+					buffer[i] = (buffer[i] + shift > LOWER_END) ? (buffer[i] + shift) - ALPHA_SPAN : buffer[i] + shift;
 				}
 			}
 		}
@@ -124,6 +119,6 @@ int main(int argc, char *argv[])
 	_Assert(fObj != nullptr, strerror(errno));
 
 	// Actual rotation
-	rotate(fObj, &status, 0);
+	rotate(fObj, &status, 13);
 	return 0;
 }
