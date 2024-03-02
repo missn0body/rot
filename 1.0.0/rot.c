@@ -27,6 +27,9 @@ typedef uint8_t flag_t;
 // checking for ANSI mode
 #define ANSI            (1 << 7)
 
+#define ROT47		(1 << 3)
+#define ROTN		(1 << 4)
+
 // ANSI escape codes, to use for color output, cause
 // I quite like colors in my terminal :)
 #define RED		"\033[30;101m"
@@ -59,11 +62,19 @@ static flag_t status = 0;
 // BOILERPLATE ENDS HERE
 ///////////////////////////////////////////////////////////
 
-const int OURBUF 	= 256;
-const int ASCII_BEGIN 	= 33;	// 33 = '!'
-const int ASCII_END	= 126;	// 126 = '~'
+constexpr int OURBUF 	  = 256;
+constexpr int ASCII_BEGIN = 33;	 // '!'
+constexpr int ASCII_END   = 126; // '~'
 
-void rotate(FILE *fObj)
+constexpr int UPPER_BEGIN = 65;	 // A
+constexpr int UPPER_END   = 90;	 // Z
+constexpr int LOWER_BEGIN = 97;	 // a
+constexpr int LOWER_END	  = 122; // z
+
+constexpr int ASCII_SPAN  = (ASCII_END - ASCII_BEGIN);
+//constexpr int ALPHA_SPAN  = (UPPER_END - UPPER_BEGIN);
+
+void rotate(FILE *fObj, flag_t *status, int shift)
 {
 	if(fObj == nullptr) return;
 
@@ -71,11 +82,30 @@ void rotate(FILE *fObj)
 	while(fgets(buffer, sizeof buffer, fObj) != NULL)
 	{
 		buffer[strcspn(buffer, "\r\n")] = '\0';
-		for(int i = 0; buffer[i] != '\0'; i++)
+		if(test(*status, ROT47) || shift == 0)
 		{
-			if(buffer[i] >= ASCII_BEGIN && buffer[i] <= ASCII_END)
+			// ROT47
+			for(int i = 0; buffer[i] != '\0'; i++)
 			{
-				buffer[i] = ASCII_BEGIN + ((buffer[i] + 14) % ((ASCII_END - ASCII_BEGIN) + 1));
+				if(buffer[i] >= ASCII_BEGIN && buffer[i] <= ASCII_END)
+				{
+					buffer[i] = ASCII_BEGIN + ((buffer[i] + 14) % (ASCII_SPAN + 1));
+				}
+			}
+		}
+		else if(test(*status, ROTN) || shift != 0)
+		{
+			// ROT(N), e.g. ROT13, ROT1, ROT25, etc...
+			for(int i = 0; buffer[i] != '\0'; i++)
+			{
+				if(buffer[i] >= UPPER_BEGIN && buffer[i] <= UPPER_END)
+				{
+					buffer[i] = buffer[i];
+				}
+				else if(buffer[i] >= LOWER_BEGIN && buffer[i] <= LOWER_END)
+				{
+					buffer[i] = buffer[i];
+				}
 			}
 		}
 
@@ -94,6 +124,6 @@ int main(int argc, char *argv[])
 	_Assert(fObj != nullptr, strerror(errno));
 
 	// Actual rotation
-	rotate(fObj);
+	rotate(fObj, &status, 0);
 	return 0;
 }
