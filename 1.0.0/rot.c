@@ -85,9 +85,10 @@ constexpr int LOWER_BEGIN = 97;
 constexpr int LOWER_END   = 122;
 constexpr int ALPHA_SPAN  = (UPPER_END - UPPER_BEGIN) + 1;
 
-void rotate(FILE *fObj, flag_t *status, int shift)
+void rotate(FILE *fObj, FILE *outObj, flag_t *status, int shift)
 {
 	if(fObj == nullptr) return;
+	FILE *out = (outObj == nullptr) ? stdout : outObj;
 
 	char buffer[OURBUF];
 	while(fgets(buffer, sizeof buffer, fObj) != NULL)
@@ -116,7 +117,7 @@ void rotate(FILE *fObj, flag_t *status, int shift)
 			}
 		}
 
-		printf("%s\n", buffer);
+		fprintf(out, "%s\n", buffer);
 	}
 
 	return;
@@ -144,12 +145,12 @@ int main(int argc, char *argv[])
 
 	char inFile[80] = {0}, outFile[80] = {0};
 	char *programName = argv[0];
-	int c, shiftAmount = 0, nonArgCount = 0;
+	int c, shiftAmount = 0;
 
 	// Iterate through all arguments sent, character by character
 	while(--argc > 0 && (*++argv)[0] != '\0')
 	{
-		if((*argv)[0] != '-')
+		if((*argv)[0] != '-' && !isdigit((*argv)[0]))
 		{
 			if(outFile[0] != '\0' && !isdigit((*argv)[0]))
 			{
@@ -177,7 +178,7 @@ int main(int argc, char *argv[])
 				if(strcmp((*argv) + 2, "num")     == 0)
 				{
 					if(*(argv + 1) == nullptr) _Error("option requires argument");
-					else { shiftAmount = atoi(*(argv + 1)); nonArgCount--; }
+					else shiftAmount = atoi(*(argv + 1));
 					continue;
 				}
 			}
@@ -186,13 +187,13 @@ int main(int argc, char *argv[])
 				// Single character option testing here.
 				switch(c)
 				{
-					case 'h': showUsage(); 			   exit(EXIT_SUCCESS);
-					case 'v': showVersion(); 		   exit(EXIT_SUCCESS);
-					case 'a': setbit(status, ANSI); 	   break;
-					case 'l': setbit(status, LIST); 	   break;
+					case 'h': showUsage(); 		exit(EXIT_SUCCESS);
+					case 'v': showVersion(); 	exit(EXIT_SUCCESS);
+					case 'a': setbit(status, ANSI); break;
+					case 'l': setbit(status, LIST); break;
 					case 'n':
 						if(*(argv + 1) == nullptr) _Error("option requires argument");
-						else { shiftAmount = atoi(*(argv + 1)); nonArgCount--; }
+						else shiftAmount = atoi(*(argv + 1));
 						break;
 					// This error flag can either be set by a
 					// completely unrelated character inputted,
@@ -206,9 +207,18 @@ int main(int argc, char *argv[])
 		}
 	}
 
+	FILE *inObj = nullptr, *outObj = nullptr;
+	inObj = (!isatty(STDIN_FILENO) && inFile[0] != '\0') ? stdin : fopen(inFile, "r");
+
+	if(inObj == nullptr) _Error(strerror(errno));
+	if(outFile[0] != '\0') outObj = fopen(outFile, "a");
+
 	puts(inFile);
 	puts(outFile);
 	printf("shiftAmount = %d\n", shiftAmount);
+
+	puts((inObj == stdin) ? "input from pipe" : "input from file");
+	puts((outObj != nullptr) ? "Writing to file" : "Writing to stdout");
 
 	// Actual rotation
 	//rotate(fObj, &status, 13);
