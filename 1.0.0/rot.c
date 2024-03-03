@@ -3,11 +3,14 @@
 #include <stdint.h>
 #include <string.h>
 #include <errno.h>
+#include <ctype.h>
 #include <unistd.h>
 
 ///////////////////////////////////////////////////////////
 // BOILERPLATE BEGINS HERE
 ///////////////////////////////////////////////////////////
+
+const char *VERSION = "1.0.0";
 
 // We're not using "char", just in case there's some
 // dystopian future where they changed the definition
@@ -27,6 +30,8 @@ typedef uint8_t flag_t;
 // checking for ANSI mode
 #define ANSI            (1 << 7)
 
+// Modes of operation for this program
+#define LIST		(1 << 2)
 #define ROT47		(1 << 3)
 #define ROTN		(1 << 4)
 
@@ -36,6 +41,12 @@ typedef uint8_t flag_t;
 #define BLUE		"\033[34m"
 #define GREEN		"\033[32m"
 #define RESET		"\033[0m"
+
+// Macro shorthands, for inserting as a string variable
+// into a printf-like statment
+// e.g. printf("%s%s%s", red_if_color(status), "whatever", reset_if_color(status))
+#define green_if_color(x)	(test((x), ANSI) ? GREEN: "")
+#define reset_if_color(x)	(test((x), ANSI) ? RESET: "")
 
 // This static object will hold all of the
 // active modes within the program, with 8
@@ -54,6 +65,7 @@ static flag_t status = 0;
 
 // Rather I prefer you call this, unless you can't.
 #define _Error(x)		_error(__FILE__, __LINE__, x, &status)
+#define _NoteArg(x, y, z)	fprintf(stderr, "%s%s%s: %s -- \"%s\"\n", green_if_color(status), x, reset_if_color(status), y, z)
 
 // My own assert function, because assert.h was too much for me
 #define _Assert(x, y)		if(!(x)) { _Error(y); }
@@ -110,15 +122,95 @@ void rotate(FILE *fObj, flag_t *status, int shift)
 	return;
 }
 
+void showVersion(void) { printf("ROTate (%s): a customizable substitution cipher by anson.\n", VERSION); }
+void showUsage(void)
+{
+	printf("ROTate (%s): a customizable substitution cipher by anson.\n", VERSION);
+	puts("usage:\n\trot -h / --help");
+	puts("\trot -v / --version");
+	puts("\trot [-al] [-n <number>] infile [outfile]");
+	puts("\tcommand-to-stdout | rot [-al] [-n <number>] [outfile]\n");
+	puts("options:\n\t-l, --list\tPrints a list of rotated strings from infile");
+	puts("\t-n, --num <arg> Specifies the amount that each character is shifted");
+	puts("\t-a, --ansi\tPrints color via ANSI escape codes, where applicable");
+	puts("\t-h, --help\tDisplays this information");
+	puts("\t-v, --version\tDisplays version information");
+}
+
 int main(int argc, char *argv[])
 {
 	// This program needs some sort of input, whether it be from pipe or a file
 	_Assert(!isatty(STDIN_FILENO) || argc > 1, "too few arguments. try \"--help\"");
-	// If STDIN is a terminal, then there must be args at this point
-	FILE *fObj = (isatty(STDIN_FILENO) || argc > 2) ? fopen(argv[1], "r") : stdin;
-	_Assert(fObj != nullptr, strerror(errno));
+
+	char inFile[80] = {0}, outFile[80] = {0};
+	char *programName = argv[0];
+	int c, shiftAmount = 0, nonArgCount = 0;
+
+	// Iterate through all arguments sent, character by character
+	while(--argc > 0 && (*++argv)[0] != '\0')
+	{
+		if((*argv)[0] != '-')
+		{
+			if(outFile[0] != '\0' && !isdigit((*argv)[0]))
+			{
+				_NoteArg(programName, "discarded program input", *argv);
+				continue;
+			}
+
+			if(inFile[0] == '\0') 	    strncpy(inFile, *argv, sizeof(inFile));
+			else if(outFile[0] == '\0') strncpy(outFile, *argv, sizeof(outFile));
+		}
+
+		if((*argv)[0] == '-')
+		{
+			// If there's another dash, then it's a long option.
+			// Move the pointer up 2 places and compare the word itself.
+			if((*argv)[1] == '-')
+			{
+				// Using continue statements here so that the user
+				// can use both single character and long options
+				// simultaniously, and the loop can test both.
+				if(strcmp((*argv) + 2, "help")    == 0) { showUsage(); 		 exit(EXIT_SUCCESS); }
+				if(strcmp((*argv) + 2, "version") == 0) { showVersion(); 	 exit(EXIT_SUCCESS); }
+				if(strcmp((*argv) + 2, "ansi")    == 0) { setbit(status, ANSI);		   continue; }
+				if(strcmp((*argv) + 2, "list")    == 0) { setbit(status, LIST);		   continue; }
+				if(strcmp((*argv) + 2, "num")     == 0)
+				{
+					if(*(argv + 1) == nullptr) _Error("option requires argument");
+					else { shiftAmount = atoi(*(argv + 1)); nonArgCount--; }
+					continue;
+				}
+			}
+			while((c = *++argv[0]))
+			{
+				// Single character option testing here.
+				switch(c)
+				{
+					case 'h': showUsage(); 			   exit(EXIT_SUCCESS);
+					case 'v': showVersion(); 		   exit(EXIT_SUCCESS);
+					case 'a': setbit(status, ANSI); 	   break;
+					case 'l': setbit(status, LIST); 	   break;
+					case 'n':
+						if(*(argv + 1) == nullptr) _Error("option requires argument");
+						else { shiftAmount = atoi(*(argv + 1)); nonArgCount--; }
+						break;
+					// This error flag can either be set by a
+					// completely unrelated character inputted,
+					// or you managed to put -option instead of
+					// --option.
+					default : _Error("unknown option. try \"--help\""); exit(EXIT_FAILURE);
+				}
+			}
+
+			continue;
+		}
+	}
+
+	puts(inFile);
+	puts(outFile);
+	printf("shiftAmount = %d\n", shiftAmount);
 
 	// Actual rotation
-	rotate(fObj, &status, 13);
+	//rotate(fObj, &status, 13);
 	return 0;
 }
