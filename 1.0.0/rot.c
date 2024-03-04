@@ -31,14 +31,11 @@ typedef uint8_t flag_t;
 #define ANSI            (1 << 7)
 
 // Modes of operation for this program
-#define LIST		(1 << 2)
-#define ROT47		(1 << 3)
-#define ROTN		(1 << 4)
+#define VERBOSE		(1 << 3)
 
 // ANSI escape codes, to use for color output, cause
 // I quite like colors in my terminal :)
 #define RED		"\033[30;101m"
-#define BLUE		"\033[34m"
 #define GREEN		"\033[32m"
 #define RESET		"\033[0m"
 
@@ -65,6 +62,7 @@ static flag_t status = 0;
 
 // Rather I prefer you call this, unless you can't.
 #define _Error(x)		_error(__FILE__, __LINE__, x, &status)
+#define _Note(x, y)		fprintf(stderr, "%s%s%s: %s\n", green_if_color(status), x, reset_if_color(status), y)
 #define _NoteArg(x, y, z)	fprintf(stderr, "%s%s%s: %s -- \"%s\"\n", green_if_color(status), x, reset_if_color(status), y, z)
 
 // My own assert function, because assert.h was too much for me
@@ -85,25 +83,35 @@ constexpr int LOWER_BEGIN = 97;
 constexpr int LOWER_END   = 122;
 constexpr int ALPHA_SPAN  = (UPPER_END - UPPER_BEGIN) + 1;
 
-void rotate(FILE *fObj, FILE *outObj, flag_t *status, int shift)
+void rotate(FILE *fObj, FILE *outObj, flag_t *flags, int shift)
 {
 	if(fObj == nullptr) return;
 	FILE *out = (outObj == nullptr) ? stdout : outObj;
+
+	if(shift >= 26) shift -= 26;
+	if(shift >= 52)
+	{
+		_Note("rotate", "enormous shift amount recieved, reverting to rot47...");
+		shift = 0;
+	}
+
+	if(test(*flags, VERBOSE)) _Note("rotate", "begin function.");
 
 	char buffer[OURBUF];
 	while(fgets(buffer, sizeof buffer, fObj) != NULL)
 	{
 		buffer[strcspn(buffer, "\r\n")] = '\0';
-		if(test(*status, ROT47) || shift == 0)
+		if(shift == 0)
 		{
 			// ROT47
+			if(test(*flags, VERBOSE)) _Note("rotate", "rot47 mode. begin rotation");
 			for(size_t i = 0; buffer[i] != '\0'; i++)
-				if(buffer[i] >= ASCII_BEGIN && buffer[i] <= ASCII_END)
-					buffer[i] = ASCII_BEGIN + ((buffer[i] + 14) % ASCII_SPAN);
+				if(isgraph(buffer[i])) buffer[i] = ASCII_BEGIN + ((buffer[i] + 14) % ASCII_SPAN);
 		}
-		else if(test(*status, ROTN) || shift != 0)
+		else if(shift != 0)
 		{
 			// ROT(N), e.g. ROT13, ROT1, ROT25, etc...
+			if(test(*flags, VERBOSE)) _Note("rotate", "rot-n mode. begin rotation");
 			for(size_t i = 0; buffer[i] != '\0'; i++)
 			{
 				if(buffer[i] >= UPPER_BEGIN && buffer[i] <= UPPER_END)
@@ -118,30 +126,30 @@ void rotate(FILE *fObj, FILE *outObj, flag_t *status, int shift)
 		}
 
 		fprintf(out, "%s\n", buffer);
+		if(test(*flags, VERBOSE)) _Note("rotate", "done.");
 	}
 
 	return;
 }
 
-void showVersion(void) { printf("ROTate (%s): a customizable substitution cipher by anson.\n", VERSION); }
 void showUsage(void)
 {
 	printf("ROTate (%s): a customizable substitution cipher by anson.\n", VERSION);
 	puts("usage:\n\trot -h / --help");
-	puts("\trot -v / --version");
-	puts("\trot [-al] [-n <number>] infile [outfile]");
-	puts("\tcommand-to-stdout | rot [-al] [-n <number>] [outfile]\n");
+	puts("\trot [-alv] [-n <number>] infile [outfile]");
+	puts("\tcommand-to-stdout | rot [-alv] [-n <number>] [outfile]\n");
 	puts("options:\n\t-l, --list\tPrints a list of rotated strings from infile");
 	puts("\t-n, --num <arg> Specifies the amount that each character is shifted");
+	puts("\t-v, --verbose\tEnables debug prints and extra information");
 	puts("\t-a, --ansi\tPrints color via ANSI escape codes, where applicable");
 	puts("\t-h, --help\tDisplays this information");
-	puts("\t-v, --version\tDisplays version information");
 }
 
 int main(int argc, char *argv[])
 {
 	// This program needs some sort of input, whether it be from pipe or a file
-	_Assert(!isatty(STDIN_FILENO) || argc > 1, "too few arguments. try \"--help\"");
+	bool fromPipe = !isatty(STDIN_FILENO);
+	_Assert(fromPipe || argc > 1, "too few arguments. try \"--help\"");
 
 	char inFile[80] = {0}, outFile[80] = {0};
 	char *programName = argv[0];
@@ -158,8 +166,8 @@ int main(int argc, char *argv[])
 				continue;
 			}
 
-			if(inFile[0] == '\0') 	    strncpy(inFile, *argv, sizeof(inFile));
-			else if(outFile[0] == '\0') strncpy(outFile, *argv, sizeof(outFile));
+			if(inFile[0] == '\0' && !fromPipe) strncpy(inFile, *argv, sizeof(inFile));
+			else if(outFile[0] == '\0') 	   strncpy(outFile, *argv, sizeof(outFile));
 		}
 
 		if((*argv)[0] == '-')
@@ -171,10 +179,9 @@ int main(int argc, char *argv[])
 				// Using continue statements here so that the user
 				// can use both single character and long options
 				// simultaniously, and the loop can test both.
-				if(strcmp((*argv) + 2, "help")    == 0) { showUsage(); 		 exit(EXIT_SUCCESS); }
-				if(strcmp((*argv) + 2, "version") == 0) { showVersion(); 	 exit(EXIT_SUCCESS); }
-				if(strcmp((*argv) + 2, "ansi")    == 0) { setbit(status, ANSI);		   continue; }
-				if(strcmp((*argv) + 2, "list")    == 0) { setbit(status, LIST);		   continue; }
+				if(strcmp((*argv) + 2, "help")    == 0) { showUsage(); 		   exit(EXIT_SUCCESS); }
+				if(strcmp((*argv) + 2, "verbose") == 0) { setbit(status, VERBOSE); continue; }
+				if(strcmp((*argv) + 2, "ansi")    == 0) { setbit(status, ANSI);	   continue; }
 				if(strcmp((*argv) + 2, "num")     == 0)
 				{
 					if(*(argv + 1) == nullptr) _Error("option requires argument");
@@ -187,10 +194,9 @@ int main(int argc, char *argv[])
 				// Single character option testing here.
 				switch(c)
 				{
-					case 'h': showUsage(); 		exit(EXIT_SUCCESS);
-					case 'v': showVersion(); 	exit(EXIT_SUCCESS);
-					case 'a': setbit(status, ANSI); break;
-					case 'l': setbit(status, LIST); break;
+					case 'h': showUsage(); 		   exit(EXIT_SUCCESS);
+					case 'v': setbit(status, VERBOSE); break;
+					case 'a': setbit(status, ANSI);    break;
 					case 'n':
 						if(*(argv + 1) == nullptr) _Error("option requires argument");
 						else shiftAmount = atoi(*(argv + 1));
@@ -207,20 +213,19 @@ int main(int argc, char *argv[])
 		}
 	}
 
+	// Again let's as if we're getting anything from pipe, that takes precedence over
+	// input from a file
 	FILE *inObj = nullptr, *outObj = nullptr;
-	inObj = (!isatty(STDIN_FILENO) && inFile[0] != '\0') ? stdin : fopen(inFile, "r");
-
-	if(inObj == nullptr) _Error(strerror(errno));
-	if(outFile[0] != '\0') outObj = fopen(outFile, "a");
-
-	puts(inFile);
-	puts(outFile);
-	printf("shiftAmount = %d\n", shiftAmount);
-
-	puts((inObj == stdin) ? "input from pipe" : "input from file");
-	puts((outObj != nullptr) ? "Writing to file" : "Writing to stdout");
+	inObj =  (fromPipe && inFile[0] == '\0') ? stdin : fopen(inFile, "r");
+	outObj = (outFile[0] != '\0') ? fopen(outFile, "a") : nullptr;
+	// Debug prints if it's set
+	if(test(status, VERBOSE)) _Note(programName, (inObj == stdin) ? "recieved input from pipe" : "recieved input from file");
+	if(test(status, VERBOSE)) _Note(programName, (outObj != nullptr) ? "writing to file" : "writing to stdout");
 
 	// Actual rotation
-	//rotate(fObj, &status, 13);
+	rotate(inObj, outObj, &status, shiftAmount);
+
+	if(outObj != nullptr) fclose(outObj);
+	if(inObj != stdin)    fclose(inObj);
 	return 0;
 }
