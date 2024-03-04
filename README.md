@@ -23,10 +23,10 @@ command-to-stdout | rot [-alv] [-n <number>] [outfile]
 For more information on the ciphers as replicated by these programs,
 see the links below:
 
-www.rot47.net
-www.rumkin.com/tools/cipher/rot13/
-www.en.wikipedia.org/wiki/ROT13
-www.en.wikipedia.org/wiki/Caesar_cipher
+https://rot47.net
+https://rumkin.com/tools/cipher/rot13/
+https://en.wikipedia.org/wiki/ROT13
+https://en.wikipedia.org/wiki/Caesar_cipher
 
 ### v.1.0.0 (Initial Release)
 
