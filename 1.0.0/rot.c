@@ -138,8 +138,7 @@ void showUsage(void)
 	puts("usage:\n\trot -h / --help");
 	puts("\trot [-alv] [-n <number>] infile [outfile]");
 	puts("\tcommand-to-stdout | rot [-alv] [-n <number>] [outfile]\n");
-	puts("options:\n\t-l, --list\tPrints a list of rotated strings from infile");
-	puts("\t-n, --num <arg> Specifies the amount that each character is shifted");
+	puts("options:\n\t-n, --num <arg> Specifies the amount that each character is shifted");
 	puts("\t-v, --verbose\tEnables debug prints and extra information");
 	puts("\t-a, --ansi\tPrints color via ANSI escape codes, where applicable");
 	puts("\t-h, --help\tDisplays this information");
