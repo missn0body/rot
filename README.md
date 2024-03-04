@@ -8,15 +8,17 @@ configured to use different rotation ciphers, such as
 Caesar and ROT13, as well as output to a file.
 
 Command-line arguments are as follows:
-> rot -n (--number) <number> -a (--ansi) -v (--verbose) -h (--help)
+`rot -n (--number) <number> -a (--ansi) -v (--verbose) -h (--help)`
 
 The short version of these arguments can be combined together,
 and both short and long arguments can be mixed together. If not
 accepting input from a pipe or file, this program will not run.
 
 Usage examples are as follows:
-> rot [-alv] [-n <number>] infile [outfile]
-> command-to-stdout | rot [-alv] [-n <number>] [outfile]
+```
+rot [-alv] [-n <number>] infile [outfile]
+command-to-stdout | rot [-alv] [-n <number>] [outfile]
+```
 
 For more information on the ciphers as replicated by these programs,
 see the links below:
