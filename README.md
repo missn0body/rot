@@ -1,4 +1,4 @@
-# rotate
+# rot
 
 A customizable rotation cipher. Made by anson in 2024.
 This program can accept input from a pipe and also by a
@@ -25,8 +25,8 @@ see the links below:
 
 www.rot47.net
 www.rumkin.com/tools/cipher/rot13/
-en.wikipedia.org/wiki/ROT13
-en.wikipedia.org/wiki/Caesar_cipher
+www.en.wikipedia.org/wiki/ROT13
+www.en.wikipedia.org/wiki/Caesar_cipher
 
 ### v.1.0.0 (Initial Release)
 
