@@ -21,10 +21,10 @@ at my E-Mail, <thesearethethingswesaw@gmail.com>
 For more information on the ciphers as replicated by these programs,
 see the links below:
 
-[An interactive demonstration of ROT47 and its implementations](https://rot47.net)
-[An interactive demonstration of ROT13](https://rumkin.com/tools/cipher/rot13/)
-[Wikipedia entry on the ROT13 cipher](https://en.wikipedia.org/wiki/ROT13)
-[Wikipedia entry on the Caesar cipher](https://en.wikipedia.org/wiki/Caesar_cipher)
+[An interactive demonstration of ROT47 and its implementations](https://rot47.net)  
+[An interactive demonstration of ROT13](https://rumkin.com/tools/cipher/rot13/)  
+[Wikipedia entry on the ROT13 cipher](https://en.wikipedia.org/wiki/ROT13)  
+[Wikipedia entry on the Caesar cipher](https://en.wikipedia.org/wiki/Caesar_cipher)  
 
 ### v.1.0.0 (Initial Release)
 
@@ -33,5 +33,5 @@ A customizable rotation cipher.
 
 ### v.1.0.5
 
-(Late July 2024)  
+(August 2024)  
 Under Construction!
