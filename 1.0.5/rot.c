@@ -1,8 +1,7 @@
-// TODO files not being accepted, wrong diagnostic output?
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <ctype.h>
 #include <unistd.h>
 
 static const char *VERSION = "1.0.5";
@@ -40,7 +39,7 @@ static constexpr short alpha_span  = (upper_end - upper_begin) + 1;
 // so I will approximate the ctype.h functions below.
 // You can easily delete these and substitute for the actual functions
 static inline bool my_isgraph(const int what) { return ( what >= ascii_begin && what <= ascii_end ) ? true : false; }
-static inline bool my_isdigit(const int what) { return ( (what & 7) <= 9 && (what & 7) >= 0 ) ? true : false; }
+static inline bool my_isdigit(const int what) { return ( (what - '0') <= 9 && (what - '0') >= 1 ) ? true : false; }
 static inline bool strempty(const char *what) { return (*what == '\0'); }
 static inline const char *boolstr(bool what)  { return (what) ? "true" : "false"; }
 
@@ -131,18 +130,18 @@ int main(int argc, char *argv[])
 {
 	// This program needs some sort of input, whether it be from pipe or a file
 	bool frompipe = !isatty(STDIN_FILENO);
-	if(!frompipe && argc < 2)
+	bool verbose_flag = false;
+
+	char *program = argv[0];
+	char infile[bufsize] = {0}, outfile[bufsize] = {0};
+
+	if(!(frompipe || argc > 1))
 	{
-		fprintf(stderr, "%s: too few arguments. try \"--help\"\n", argv[0]);
+		fprintf(stderr, "%s: too few arguments, try \"--help\"\n", program);
 		exit(EXIT_FAILURE);
 	}
 
-	char infile[bufsize] = {0}, outfile[bufsize] = {0};
-	char *program = argv[0];
 	int c, shift_amount = 0;
-
-	bool verbose_flag = false;
-
 	// Iterate through all arguments sent, character by character
 	while(--argc > 0 && (*++argv)[0] != '\0')
 	{
