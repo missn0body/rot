@@ -1,7 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <ctype.h>
 #include <unistd.h>
 
 static const char *VERSION = "1.0.5";
@@ -34,6 +33,9 @@ static constexpr short lower_end   = 122;
 
 static constexpr short alpha_span  = (upper_end - upper_begin) + 1;
 
+// This is how many shifts we should have for a shift table
+static constexpr short shift_count = 10;
+
 // In the previous version, I used ctype.h for two functions.
 // I like to use the least amount of header files whenever I can,
 // so I will approximate the ctype.h functions below.
@@ -44,16 +46,16 @@ static inline bool strempty(const char *what) { return (*what == '\0'); }
 static inline const char *boolstr(bool what)  { return (what) ? "true" : "false"; }
 
 // Actual rotation function
-// The verbose flag should also function as run-time diagnostics,
-// spitting out its current state and arguments to stdout
-void rotate(const char *in, const char *out, short shift, bool verbose)
+// Warning! This function is destructive, the buffer given will be operated on
+// Save a previous state of the buffer before passing
+void rotate_str(char *in, size_t size, short shift, bool verbose)
 {
-	if(verbose) printf("%s: begin function (from %s, to %s, shift %d, verbose %s)\n", __func__, in, out, shift, boolstr(verbose));
-
-	// We can either gather input from stdin or a file, and output to stdout or a file
-	FILE *in_obj  = (in  == nullptr) ? stdin  : fopen(in, "r");
-	FILE *out_obj = (out == nullptr) ? stdout : fopen(out, "a");
-	if(in_obj == nullptr || out_obj == nullptr) { perror(__func__); return; }
+	// Sanity check
+	if(in == nullptr)
+	{
+		fprintf(stderr, "%s: buffers reported nullptr, exiting...", __func__);
+		return;
+	}
 
 	// If we get some sort of outrageous shift, either wrap-around or reset
 	if(shift >= 26) shift -= 26;
@@ -63,35 +65,56 @@ void rotate(const char *in, const char *out, short shift, bool verbose)
 		shift = 0;
 	}
 
-	char buffer[bufsize];
-	// Main loop through file objects
-	while(fgets(buffer, bufsize, in_obj) != nullptr)
+	if(shift == 0)
 	{
-		buffer[strcspn(buffer, "\r\n")] = '\0';
-		if(shift == 0)
+		// ROT47
+		if(verbose) printf("%s: rot47 mode. begin rotation\n", __func__);
+		for(size_t i = 0; i < size; i++)
+			if(my_isgraph(in[i])) in[i] = ascii_begin + ((in[i] + 14) % ascii_span);
+	}
+	else if(shift != 0)
+	{
+		// ROT(N), e.g. ROT13, ROT1, ROT25, etc...
+		if(verbose) printf("%s: rot-n mode. begin rotation\n", __func__);
+		for(size_t i = 0; i < size; i++)
 		{
-			// ROT47
-			if(verbose) printf("%s: rot47 mode. begin rotation\n", __func__);
-			for(size_t i = 0; buffer[i] != '\0'; i++)
-				if(my_isgraph(buffer[i])) buffer[i] = ascii_begin + ((buffer[i] + 14) % ascii_span);
-		}
-		else if(shift != 0)
-		{
-			// ROT(N), e.g. ROT13, ROT1, ROT25, etc...
-			if(verbose) printf("%s: rot-n mode. begin rotation\n", __func__);
-			for(size_t i = 0; buffer[i] != '\0'; i++)
+			if(in[i] >= upper_begin && in[i] <= upper_end)
 			{
-				if(buffer[i] >= upper_begin && buffer[i] <= upper_end)
-				{
-					buffer[i] = (buffer[i] + shift > upper_end) ? (buffer[i] + shift) - alpha_span : buffer[i] + shift;
-				}
-				else if(buffer[i] >= lower_begin && buffer[i] <= lower_end)
-				{
-					buffer[i] = (buffer[i] + shift > lower_end) ? (buffer[i] + shift) - alpha_span : buffer[i] + shift;
-				}
+				in[i] = (in[i] + shift > upper_end) ? (in[i] + shift) - alpha_span : in[i] + shift;
+			}
+			else if(in[i] >= lower_begin && in[i] <= lower_end)
+			{
+				in[i] = (in[i] + shift > lower_end) ? (in[i] + shift) - alpha_span : in[i] + shift;
 			}
 		}
+	}
 
+	return;
+
+}
+
+// The verbose flag should also function as run-time diagnostics,
+// spitting out its current state and arguments to stdout
+void rotate_file(const char *in, const char *out, short shift, bool verbose)
+{
+	if(verbose) printf("%s: begin function (from %s, to %s, shift %d, verbose %s)\n", __func__, in, out, shift, boolstr(verbose));
+
+	// We can either gather input from stdin or a file, and output to stdout or a file
+	FILE *in_obj  = (in  == nullptr) ? stdin  : fopen(in, "r");
+	FILE *out_obj = (out == nullptr) ? stdout : fopen(out, "a");
+	if(in_obj == nullptr || out_obj == nullptr) { perror(__func__); return; }
+
+	// Input and output buffers
+	char buffer[bufsize] = {0};
+
+	// Main loop through file object
+	while(fgets(buffer, bufsize, in_obj) != nullptr)
+	{
+		// Erase trailing newline
+		buffer[strcspn(buffer, "\r\n")] = '\0';
+		rotate_str(buffer, bufsize, shift, verbose);
+
+		// Output rotated string
 		fprintf(out_obj, "%s\n", buffer);
 		if(verbose) printf("%s: done.\n", __func__);
 	}
@@ -103,6 +126,17 @@ void rotate(const char *in, const char *out, short shift, bool verbose)
 
 	return;
 }
+
+/*
+
+// This function will generate a table which iterates through rotations of the input,
+// e.g. "abcd"/w 1 -> "bcde", "abcd"/w 2 -> "cdef, etc."
+void generate_table(const char *in, const char *out, bool verbose)
+{
+
+}
+
+*/
 
 // User Interface functions
 void version(void)
@@ -131,6 +165,7 @@ int main(int argc, char *argv[])
 	// This program needs some sort of input, whether it be from pipe or a file
 	bool frompipe = !isatty(STDIN_FILENO);
 	bool verbose_flag = false;
+	bool gen_table = false;
 
 	char *program = argv[0];
 	char infile[bufsize] = {0}, outfile[bufsize] = {0};
@@ -169,6 +204,7 @@ int main(int argc, char *argv[])
 				if(strcmp((*argv) + 2, "help")    == 0) { usage();   exit(EXIT_SUCCESS); }
 				if(strcmp((*argv) + 2, "version") == 0) { version(); exit(EXIT_SUCCESS); }
 				if(strcmp((*argv) + 2, "verbose") == 0) { verbose_flag = true; continue; }
+				if(strcmp((*argv) + 2, "table")	  == 0) { gen_table = true;    continue; }
 				if(strcmp((*argv) + 2, "num")     == 0)
 				{
 					if(*(argv + 1) == nullptr)
@@ -187,6 +223,7 @@ int main(int argc, char *argv[])
 				{
 					case 'h': usage(); exit(EXIT_SUCCESS);
 					case 'v': verbose_flag = true; break;
+					case 't': gen_table = true;    break;
 					case 'n':
 						if(*(argv + 1) == nullptr)
 						{
@@ -219,8 +256,18 @@ int main(int argc, char *argv[])
 		printf("%s: %s\n", program, is_stdout ? "writing to stdout"	   : "writing to file");
 	}
 
-	// Actual rotation
-	rotate((is_stdin == true) ? nullptr : infile, (is_stdout == true) ? nullptr : outfile, shift_amount, verbose_flag);
+	// Only do a single round of rotation, no tables
+//	if(!gen_table)
+//	{
+		// Actual rotation
+		rotate_file((is_stdin == true) ? nullptr : infile, (is_stdout == true) ? nullptr : outfile, shift_amount, verbose_flag);
+
+//	}
+	// Generating a shift table
+//	else
+//	{
+//		generate_table((is_stdin == true) ? nullptr : infile, (is_stdout == true) ? nullptr : outfile, verbose_flag);
+//	}
 
 	// End!
 	exit(EXIT_SUCCESS);
