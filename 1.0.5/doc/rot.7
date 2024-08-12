@@ -1,0 +1,60 @@
+.TH rot 7 "August 2024" "Version 1.0.5"
+.SH NAME
+rot \- a customizable ROTation cipher
+.SH SYNOPSIS
+.B rot
+.B -t
+.B [-v]
+.I input-file
+.I [<output-file>]
+.PP
+.B rot
+.B [-v]
+.B [-n <number>]
+.I input-file
+.I [<output-file>]
+.PP
+.B command-to-stdout | rot
+.B -t
+.B [-v]
+.I [<output-file>]
+.PP
+.B command-to-stdout | panama
+.B [-v]
+.B [-n <num>]
+.I [<output-file>]
+.SH DESCRIPTION
+.B rot
+is a customizable rotation cipher, in that the user can provide the program
+with an arbitrary decimal number and the program will, given input from a file or stdin,
+will shift each printable character in the given input to that number. For example,
+providing
+.B rot
+with an
+.I -n
+flag of 3, this will simulate a Caesar cipher of the input. 13 for ROT13, etc.
+.PP
+When given an input but no other arguments,
+.B rot
+will default to ROT47, a cipher similar to ROT13 except using an alphabet consisting
+of all the printable ASCII characters.
+.PP
+When specifying an output file, the output file will be created if it does not already
+exist, but will also overwrite any previous contents if it is a file that does exist.
+.B rot
+will not alter the input, however.
+.B rot
+is invokable through the terminal.
+.SH OPTIONS
+.IP "-t, --table"
+Generates a shift table of each line of the input, from 1 to 13, to stdout or an output file
+.IP "-n, --num"
+With a decimal argument, describes the shift amount to use to encipher the input.
+.IP "-v, --verbose"
+Signals
+.B rot
+to output diagnostic and verbose information
+.SH BUGS
+No known bugs.
+.SH AUTHORS
+Written by anson <thesearethethingswesaw@gmail.com>

@@ -1,5 +1,3 @@
-// TODO fix bug where output is incorrectly shifted, probably in rotate_str()
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -36,7 +34,7 @@ static constexpr short lower_end   = 122;
 static constexpr short alpha_span  = (upper_end - upper_begin) + 1;
 
 // This is how many shifts we should have for a shift table
-static constexpr short shift_count = 10;
+static constexpr short shift_count = 13;
 
 // In the previous version, I used ctype.h for two functions.
 // I like to use the least amount of header files whenever I can,
@@ -48,12 +46,12 @@ static inline bool strempty(const char *what) { return (*what == '\0'); }
 static inline const char *boolstr(bool what)  { return (what) ? "true" : "false"; }
 
 // Actual rotation function
-// Warning! This function is destructive, the buffer given will be operated on
-// Save a previous state of the buffer before passing
-void rotate_str(char *in, size_t size, short shift, bool verbose)
+// Previously, this function would have trouble in a loop, because it destroyed its inputs,
+// so you would get exponential instead of incremental shifts.
+void rotate_str(char *in, char *out, size_t size, short shift, bool verbose)
 {
 	// Sanity check
-	if(in == nullptr)
+	if(in == nullptr || out == nullptr)
 	{
 		fprintf(stderr, "%s: buffers reported nullptr, exiting...", __func__);
 		return;
@@ -67,26 +65,30 @@ void rotate_str(char *in, size_t size, short shift, bool verbose)
 		shift = 0;
 	}
 
+	// Copy the input to the output
+	// This function assumes that both buffers are of the same size
+	strncpy(out, in, size);
+
 	if(shift == 0)
 	{
 		// ROT47
 		if(verbose) printf("%s: rot47 mode. begin rotation\n", __func__);
 		for(size_t i = 0; i <= size; i++)
-			if(my_isgraph(in[i])) in[i] = ascii_begin + ((in[i] + 14) % ascii_span);
+			if(my_isgraph(out[i])) out[i] = ascii_begin + ((out[i] + 14) % ascii_span);
 	}
 	else if(shift != 0)
 	{
 		// ROT(N), e.g. ROT13, ROT1, ROT25, etc...
-		if(verbose) printf("%s: rot-n mode. begin rotation\n", __func__);
+		if(verbose) printf("%s: rot-n (%d) mode. begin rotation\n", __func__, shift);
 		for(size_t i = 0; i <= size; i++)
 		{
-			if(in[i] >= upper_begin && in[i] <= upper_end)
+			if(out[i] >= upper_begin && out[i] <= upper_end)
 			{
-				in[i] = (in[i] + shift > upper_end) ? (in[i] + shift) - alpha_span : in[i] + shift;
+				out[i] = (out[i] + shift > upper_end) ? (out[i] + shift) - alpha_span : out[i] + shift;
 			}
-			else if(in[i] >= lower_begin && in[i] <= lower_end)
+			else if(out[i] >= lower_begin && out[i] <= lower_end)
 			{
-				in[i] = (in[i] + shift > lower_end) ? (in[i] + shift) - alpha_span : in[i] + shift;
+				out[i] = (out[i] + shift > lower_end) ? (out[i] + shift) - alpha_span : out[i] + shift;
 			}
 		}
 	}
@@ -103,21 +105,20 @@ void rotate_file(const char *in, const char *out, short shift, bool verbose)
 
 	// We can either gather input from stdin or a file, and output to stdout or a file
 	FILE *in_obj  = (in  == nullptr) ? stdin  : fopen(in, "r");
-	FILE *out_obj = (out == nullptr) ? stdout : fopen(out, "a");
+	FILE *out_obj = (out == nullptr) ? stdout : fopen(out, "w");
 	if(in_obj == nullptr || out_obj == nullptr) { perror(__func__); return; }
 
-	char buffer[bufsize] = {0};
+	char buffer[bufsize] = {0}, outbuf[bufsize] = {0};
 
 	// Main loop through file object
 	while(fgets(buffer, bufsize, in_obj) != nullptr)
 	{
 		// Erase trailing newline
 		buffer[strcspn(buffer, "\r\n")] = '\0';
-		rotate_str(buffer, bufsize, shift, verbose);
+		rotate_str(buffer, outbuf, bufsize, shift, verbose);
 
 		// Output rotated string
-		fprintf(out_obj, "%s\n", buffer);
-		if(verbose) printf("%s: done.\n", __func__);
+		fprintf(out_obj, "%s\n", outbuf);
 	}
 
 	// Clean up
@@ -128,7 +129,7 @@ void rotate_file(const char *in, const char *out, short shift, bool verbose)
 	return;
 }
 
-// This function will generate a table which iterates through rotations of the input,
+// This function will generate a table which iterates through rotations of the input file
 // e.g. "abcd"/w 1 -> "bcde", "abcd"/w 2 -> "cdef, etc."
 void generate_table(const char *in, const char *out, bool verbose)
 {
@@ -136,30 +137,25 @@ void generate_table(const char *in, const char *out, bool verbose)
 
 	// We can either gather input from stdin or a file, and output to stdout or a file
 	FILE *in_obj  = (in  == nullptr) ? stdin  : fopen(in, "r");
-	FILE *out_obj = (out == nullptr) ? stdout : fopen(out, "a");
+	FILE *out_obj = (out == nullptr) ? stdout : fopen(out, "w");
 	if(in_obj == nullptr || out_obj == nullptr) { perror(__func__); return; }
 
-	char buffer[bufsize] = {0};
+	char buffer[bufsize] = {0}, outbuf[bufsize] = {0};
 
 	// Main loop through file object
-	// This time, we have another loop for shifting 10 times
-	// God help you if you're printing verbosely
 	while(fgets(buffer, bufsize, in_obj) != nullptr)
 	{
 		// Erase trailing newline
 		buffer[strcspn(buffer, "\r\n")] = '\0';
 
-		fprintf(out_obj, "\"%s\", shifted %d times, from 1 to %d\n\n", buffer, shift_count, shift_count);
-		for(int i = 1; i < shift_count + 1; ++i)
+		fprintf(out_obj, "\"%s\" shifted %d times, from 1 to %d\n\n", buffer, shift_count, shift_count);
+		for(short i = 1; i <= shift_count; i++)
 		{
-			rotate_str(buffer, bufsize, i, verbose);
-			fprintf(out_obj, "%s: %d\n", buffer, i);
+			rotate_str(buffer, outbuf, bufsize, i, verbose);
+			fprintf(out_obj, "%s: %d\n", outbuf, i);
 		}
 
 		fputc('\n', out_obj);
-
-		// Output rotated string
-		if(verbose) printf("%s: done.\n", __func__);
 	}
 
 	// Clean up
@@ -173,21 +169,28 @@ void generate_table(const char *in, const char *out, bool verbose)
 // User Interface functions
 void version(void)
 {
-	printf("ROTate (%s): a customizable substitution cipher\n", VERSION);
+	printf("ROTate (%s): a customizable rotation cipher\n", VERSION);
 	return;
 }
 
 void usage(void)
 {
-	printf("ROTate (%s): a customizable substitution cipher by anson.\n", VERSION);
-	puts("usage:\n\trot -h / --help");
-	puts("\trot [-alv] [-n <number>] infile [outfile]");
-	puts("\tcommand-to-stdout | rot [-alv] [-n <number>] [outfile]\n");
-	puts("options:\n\t-n, --num <arg> Specifies the amount that each character is shifted");
-	puts("\t-v, --verbose\tEnables debug prints and extra information");
-	puts("\t-a, --ansi\tPrints color via ANSI escape codes, where applicable");
-	puts("\t-h, --help\tDisplays this information");
-	puts("\ncopyright (c) 2024, see LICENSE for related details\n");
+	printf("ROTate (%s): a customizable rotation cipher\n", VERSION);
+	printf("created by anson <thesearethethingswesaw@gmail.com>\n\n");
+	printf("usage:\n\trot (-h / --help)\n\trot --version\n");
+	printf("\trot -t [-v] input-file [<output-file>]\n");
+	printf("\trot [-v] [-n <shift>] input-file [<output-file>]\n");
+	printf("\tcommand-to-stdout | rot -t [-v] [<output-file>]\n");
+	printf("\tcommand-to-stdout | rot [-v] [-n <shift>] [<output-file>]\n\n");
+
+	printf("options:\n\t%18s\t%s\n","-n, --num",	"specifies the shift amount, e.g. \"-n 3\" means to shift 3 times, ala Caesar cipher");
+	printf("\t%18s\t%s\n", "-v, --verbose",		"prints verbose diagnostic information");
+	printf("\t%18s\t%s\n", "-t, --table",		"generates a table of incrementing shifts for viewing");
+	printf("\t%18s\t%s\n", "<shift>",		"a decimal, non-negative number");
+	printf("\t%18s\t%s\n", "input-file",		"a file to pull information from. will not be altered");
+	printf("\t%18s\t%s\n", "output-file",		"a file to output to. will erase previous contents\n");
+
+	printf("copyright (c) 2024, see LICENSE for related details\n");
 	return;
 }
 
@@ -296,7 +299,7 @@ int main(int argc, char *argv[])
 
 	}
 	// Generating a shift table
-	else
+	else if(gen_table)
 	{
 		generate_table((is_stdin == true) ? nullptr : infile, (is_stdout == true) ? nullptr : outfile, verbose_flag);
 	}

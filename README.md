@@ -34,4 +34,7 @@ A customizable rotation cipher.
 ### v.1.0.5
 
 (August 2024)  
-Under Construction!
+A customizable rotation cipher
+* Added a feature to generate tables of incrementing rotations
+* Removed ANSI formatted color ouput
+* General refactoring of code
